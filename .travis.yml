@@ -1,0 +1,34 @@
+language:
+  - cpp
+  - python
+python:
+  - "2.7"
+compiler:
+  - gcc
+
+install:
+  - sudo sh -c 'echo "deb http://packages.ros.org/ros/ubuntu precise main" > /etc/apt/sources.list.d/ros-latest.list'
+  - wget http://packages.ros.org/ros.key -O - | sudo apt-key add -
+  - sudo apt-get update -qq
+  - sudo apt-get install python-catkin-pkg python-rosdep ros-hydro-catkin python-catkin-tools python-catkin-lint -qq
+  - sudo rosdep init
+  - rosdep update
+  - mkdir -p /tmp/ws/src
+  - ln -s `pwd` /tmp/ws/src/package
+  - cd /tmp/ws/src
+  - git clone https://github.com/mitchellwills/roscpp_message_reflection.git
+  - cd /tmp/ws
+  - rosdep install --from-paths src --ignore-src --rosdistro hydro -y
+
+script:
+  - cd /tmp/ws
+  - source /opt/ros/hydro/setup.bash
+  - catkin init
+  - catkin build -p1
+  - source devel/setup.bash
+  - catkin clean -a
+
+  - catkin config --install
+  - catkin build -p1
+  - source install/setup.bash
+  - catkin lint src/package -W2
