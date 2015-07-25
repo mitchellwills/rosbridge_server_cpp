@@ -6,7 +6,6 @@
 #include <boost/enable_shared_from_this.hpp>
 #include <roscpp_message_reflection/node_handle.h>
 #include <roscpp_message_reflection/message.h>
-#include <json/json.h>
 
 namespace rosbridge_server_cpp {
 
@@ -17,6 +16,24 @@ public:
   enum StatusLevel {
     NONE, ERROR, WARNING, INFO
   };
+  static std::string levelToString(RosbridgeProtocolHandler::StatusLevel level) {
+    if(level == RosbridgeProtocolHandler::ERROR) {
+      return "error";
+    }
+    else if(level == RosbridgeProtocolHandler::WARNING) {
+      return "warning";
+    }
+    else if(level == RosbridgeProtocolHandler::INFO) {
+      return "info";
+    }
+    else if(level == RosbridgeProtocolHandler::NONE) {
+      return "none";
+    }
+    else {
+      return "";
+    }
+  }
+
 
   virtual ~RosbridgeProtocolHandler();
   virtual void close() = 0;
@@ -69,23 +86,6 @@ private:
 private:
   std::map<std::string, roscpp_message_reflection::Publisher> publishers_;
   std::map<std::string, roscpp_message_reflection::Subscriber> subscribers_;
-};
-
-class JsonRosbridgeProtocolHandler : public RosbridgeProtocolHandlerBase {
-public:
-  JsonRosbridgeProtocolHandler(roscpp_message_reflection::NodeHandle& nh,
-			       RosbridgeTransport *transport);
-  virtual ~JsonRosbridgeProtocolHandler();
-
-  virtual void onMessage(const Buffer& buf);
-  virtual void onSubscribeCallback(const std::string& topic,
-          const boost::shared_ptr<const roscpp_message_reflection::Message>& message);
-
-  virtual void sendStatusMessage(StatusLevel level, const std::string& msg);
-
-private:
-  void onMessage(const Json::Value& msg);
-  void sendMessage(const Json::Value& msg);
 };
 
 }

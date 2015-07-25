@@ -40,6 +40,7 @@ add_library(rosbridge_server_cpp
   src/rosbridge_transport.cpp
   src/rosbridge_websocket_transport.cpp
   src/rosbridge_protocol_handler.cpp
+  src/json_rosbridge_protocol_handler.cpp
 )
 target_link_libraries(rosbridge_server_cpp
   ${catkin_LIBRARIES}

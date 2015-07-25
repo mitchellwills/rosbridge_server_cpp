@@ -1,4 +1,5 @@
 #include "rosbridge_server_cpp/rosbridge_server.h"
+#include "rosbridge_server_cpp/json_rosbridge_protocol_handler.h"
 
 namespace rosbridge_server_cpp {
 
