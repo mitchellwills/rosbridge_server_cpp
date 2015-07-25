@@ -14,6 +14,10 @@ class RosbridgeClient;
 
 class RosbridgeProtocolHandler : public MessageHandler, public boost::enable_shared_from_this<RosbridgeProtocolHandler> {
 public:
+  enum StatusLevel {
+    NONE, ERROR, WARNING, INFO
+  };
+
   virtual ~RosbridgeProtocolHandler();
   virtual void close() = 0;
 };
@@ -37,12 +41,30 @@ public:
 
   roscpp_message_reflection::Publisher getPublisher(const std::string& topic);
 
-private:
-  void messageCallback(const boost::shared_ptr<const roscpp_message_reflection::Message>& message);
+protected:
+  class StatusMessageStream {
+  public:
+    StatusMessageStream(RosbridgeProtocolHandlerBase* handler, StatusLevel level);
+    ~StatusMessageStream();
+
+    template <class T>
+    StatusMessageStream& operator<<(const T& value) {
+      stream_ << value;
+      return *this;
+    }
+  private:
+    RosbridgeProtocolHandlerBase* handler_;
+    StatusLevel level_;
+    std::stringstream stream_;
+  };
+  virtual void sendStatusMessage(StatusLevel level, const std::string& msg) = 0;
 
 protected:
   roscpp_message_reflection::NodeHandle nh_;
   boost::shared_ptr<RosbridgeTransport> transport_;
+
+private:
+  void messageCallback(const boost::shared_ptr<const roscpp_message_reflection::Message>& message);
 
 private:
   std::map<std::string, roscpp_message_reflection::Publisher> publishers_;
@@ -58,6 +80,9 @@ public:
   virtual void onMessage(const Buffer& buf);
   virtual void onSubscribeCallback(const std::string& topic,
           const boost::shared_ptr<const roscpp_message_reflection::Message>& message);
+
+  virtual void sendStatusMessage(StatusLevel level, const std::string& msg);
+
 private:
   void onMessage(const Json::Value& msg);
   void sendMessage(const Json::Value& msg);

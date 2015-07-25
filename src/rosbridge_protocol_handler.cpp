@@ -19,23 +19,24 @@ void RosbridgeProtocolHandlerBase::onClose() {
 
 void RosbridgeProtocolHandlerBase::close() {
   transport_->close();
-  transport_.reset(); // may result in destruction of this object
+  transport_.reset();
   subscribers_.clear();
   publishers_.clear();
 }
 
 void RosbridgeProtocolHandlerBase::advertise(const std::string& topic, const std::string& type) {
   if(publishers_.find(topic) != publishers_.end()) { // already advertised
-    ROS_WARN_STREAM(topic << " is already advertised");
+    StatusMessageStream(this, WARNING) << topic << " is already advertised";
     // TODO handle all cases here (same type, etc)
   }
   else {
     roscpp_message_reflection::Publisher publisher = nh_.advertise(topic, type);
     if(publisher) {
+      StatusMessageStream(this, INFO) << "Publishing: topic=" << topic << ", type=" << type;
       publishers_[topic] = publisher;
     }
     else {
-      ROS_WARN_STREAM("Failed to advertise: topic=" << topic << ", type=" << type);
+      StatusMessageStream(this, WARNING) << "Failed to advertise: topic=" << topic << ", type=" << type;
     }
   }
 }
@@ -43,7 +44,10 @@ void RosbridgeProtocolHandlerBase::advertise(const std::string& topic, const std
 void RosbridgeProtocolHandlerBase::unadvertise(const std::string& topic) {
   size_t num_removed = publishers_.erase(topic);
   if(num_removed == 0) {
-    ROS_WARN_STREAM(topic << " is not advertised");
+    StatusMessageStream(this, WARNING) << topic << " is not advertised";
+  }
+  else {
+    StatusMessageStream(this, INFO) << "Unadvertising: topic=" << topic;
   }
 }
 
@@ -59,17 +63,18 @@ roscpp_message_reflection::Publisher RosbridgeProtocolHandlerBase::getPublisher(
 
 void RosbridgeProtocolHandlerBase::subscribe(const std::string& topic, const std::string& type) {
   if(subscribers_.find(topic) != subscribers_.end()) { // already subscribed
-    ROS_WARN_STREAM(topic << " is already subscribed");
+    StatusMessageStream(this, WARNING) << topic << " is already subscribed";
     // TODO handle all cases here (same type, etc)
   }
   else {
     roscpp_message_reflection::Subscriber subscriber = nh_.subscribe(topic, type,
             boost::bind(&RosbridgeProtocolHandlerBase::onSubscribeCallback, this, topic, _1));
     if(subscriber) {
+      StatusMessageStream(this, INFO) << "Subscribing: topic=" << topic << ", type=" << type;
       subscribers_[topic] = subscriber;
     }
     else {
-      ROS_WARN_STREAM("Failed to subscribe: topic=" << topic << ", type=" << type);
+      StatusMessageStream(this, WARNING) << "Failed to subscribe: topic=" << topic << ", type=" << type;
     }
   }
 }
@@ -77,9 +82,38 @@ void RosbridgeProtocolHandlerBase::subscribe(const std::string& topic, const std
 void RosbridgeProtocolHandlerBase::unsubscribe(const std::string& topic) {
   size_t num_removed = subscribers_.erase(topic);
   if(num_removed == 0) {
-    ROS_WARN_STREAM(topic << " is not subscribed");
+    StatusMessageStream(this, WARNING) << topic << " is not subscribed";
+  }
+  else {
+    StatusMessageStream(this, INFO) << "Unsubscribing: topic=" << topic;
   }
 }
+
+static std::string levelToString(RosbridgeProtocolHandler::StatusLevel level) {
+  if(level == RosbridgeProtocolHandler::ERROR) {
+    return "error";
+  }
+  else if(level == RosbridgeProtocolHandler::WARNING) {
+    return "warning";
+  }
+  else if(level == RosbridgeProtocolHandler::INFO) {
+    return "info";
+  }
+  else if(level == RosbridgeProtocolHandler::NONE) {
+    return "none";
+  }
+  else {
+    return "";
+  }
+}
+
+RosbridgeProtocolHandlerBase::StatusMessageStream::StatusMessageStream(RosbridgeProtocolHandlerBase* handler, StatusLevel level)
+  : handler_(handler), level_(level) {}
+RosbridgeProtocolHandlerBase::StatusMessageStream::~StatusMessageStream() {
+  ROS_INFO_STREAM(levelToString(level_) << ": " << stream_.str());
+  handler_->sendStatusMessage(level_, stream_.str());
+}
+
 
 class JsonValueAssignmentVisitor : public boost::static_visitor<> {
 public:
@@ -234,6 +268,13 @@ void JsonRosbridgeProtocolHandler::onSubscribeCallback(const std::string& topic,
   sendMessage(json_msg);
 }
 
+void JsonRosbridgeProtocolHandler::sendStatusMessage(StatusLevel level, const std::string& msg) {
+  Json::Value json_msg;
+  json_msg["level"] = levelToString(level);
+  json_msg["msg"] = msg;
+  sendMessage(json_msg);
+}
+
 void JsonRosbridgeProtocolHandler::sendMessage(const Json::Value& msg) {
   Json::FastWriter writer;
   boost::shared_ptr<RosbridgeTransport> transport = transport_;
@@ -248,7 +289,7 @@ void JsonRosbridgeProtocolHandler::onMessage(const Buffer& buf) {
     onMessage(msg);
   }
   else {
-    ROS_ERROR_STREAM("Error parsing message: " << reader.getFormattedErrorMessages());
+    StatusMessageStream(this, ERROR) << "Error parsing message: " << reader.getFormattedErrorMessages();
   }
 }
 
@@ -270,7 +311,7 @@ void JsonRosbridgeProtocolHandler::onMessage(const Json::Value& json_msg) {
       pub.publish(msg);
     }
     else {
-      ROS_WARN_STREAM(topic << " is not advertised");
+      StatusMessageStream(this, WARNING) << topic << " is not advertised";
     }
   }
   else if(op == "subscribe") {
@@ -280,7 +321,7 @@ void JsonRosbridgeProtocolHandler::onMessage(const Json::Value& json_msg) {
     unsubscribe(json_msg["topic"].asString());
   }
   else {
-    ROS_INFO_STREAM("Unsupported operation: " << op);
+    StatusMessageStream(this, ERROR) << "Unsupported operation: " << op;
   }
 }
 
