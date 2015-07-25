@@ -22,7 +22,7 @@ public:
 private:
   async_web_server_cpp::WebsocketConnectionPtr websocket_;
 
-  friend WebsocketMessageHandlerWrapper;
+  friend class WebsocketMessageHandlerWrapper;
 };
 
 class WebsocketTransportServer : public RosbridgeTransportServer {
