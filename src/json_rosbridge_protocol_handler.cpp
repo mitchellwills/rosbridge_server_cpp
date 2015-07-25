@@ -157,6 +157,7 @@ void JsonRosbridgeProtocolHandler::onSubscribeCallback(const std::string& topic,
 
 void JsonRosbridgeProtocolHandler::sendStatusMessage(StatusLevel level, const std::string& msg) {
   Json::Value json_msg;
+  json_msg["op"] = "status";
   json_msg["level"] = levelToString(level);
   json_msg["msg"] = msg;
   sendMessage(json_msg);
@@ -206,6 +207,9 @@ void JsonRosbridgeProtocolHandler::onMessage(const Json::Value& json_msg) {
   }
   else if(op == "unsubscribe") {
     unsubscribe(json_msg["topic"].asString());
+  }
+  else if(op == "set_level") {
+    setStatusLevel(stringToLevel(json_msg["level"].asString()));
   }
   else {
     StatusMessageStream(this, ERROR) << "Unsupported operation: " << op;

@@ -14,23 +14,38 @@ class RosbridgeClient;
 class RosbridgeProtocolHandler : public MessageHandler, public boost::enable_shared_from_this<RosbridgeProtocolHandler> {
 public:
   enum StatusLevel {
-    NONE, ERROR, WARNING, INFO
+    INVALID_LEVEL = -1, NONE, ERROR, WARNING, INFO
   };
-  static std::string levelToString(RosbridgeProtocolHandler::StatusLevel level) {
-    if(level == RosbridgeProtocolHandler::ERROR) {
+  static std::string levelToString(StatusLevel level) {
+    if(level == ERROR) {
       return "error";
     }
-    else if(level == RosbridgeProtocolHandler::WARNING) {
+    else if(level == WARNING) {
       return "warning";
     }
-    else if(level == RosbridgeProtocolHandler::INFO) {
+    else if(level == INFO) {
       return "info";
     }
-    else if(level == RosbridgeProtocolHandler::NONE) {
+    else if(level == NONE) {
       return "none";
     }
     else {
       return "";
+    }
+  }
+
+  static StatusLevel stringToLevel(const std::string& level_str) {
+    if(level_str == "error") {
+      return ERROR;
+    }
+    else if(level_str == "warning") {
+      return WARNING;
+    }
+    else if(level_str == "info") {
+      return INFO;
+    }
+    else {
+      return INVALID_LEVEL;
     }
   }
 
@@ -52,6 +67,7 @@ public:
   void unadvertise(const std::string& topic);
   void subscribe(const std::string& topic, const std::string& type);
   void unsubscribe(const std::string& topic);
+  void setStatusLevel(StatusLevel level);
 
   virtual void onSubscribeCallback(const std::string& topic,
           const boost::shared_ptr<const roscpp_message_reflection::Message>& message) = 0;
@@ -59,6 +75,8 @@ public:
   roscpp_message_reflection::Publisher getPublisher(const std::string& topic);
 
 protected:
+  virtual void sendStatusMessage(StatusLevel level, const std::string& msg) = 0;
+
   class StatusMessageStream {
   public:
     StatusMessageStream(RosbridgeProtocolHandlerBase* handler, StatusLevel level);
@@ -74,11 +92,11 @@ protected:
     StatusLevel level_;
     std::stringstream stream_;
   };
-  virtual void sendStatusMessage(StatusLevel level, const std::string& msg) = 0;
 
 protected:
   roscpp_message_reflection::NodeHandle nh_;
   boost::shared_ptr<RosbridgeTransport> transport_;
+  StatusLevel status_level_;
 
 private:
   void messageCallback(const boost::shared_ptr<const roscpp_message_reflection::Message>& message);

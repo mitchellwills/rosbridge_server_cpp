@@ -8,7 +8,7 @@ RosbridgeProtocolHandler::~RosbridgeProtocolHandler(){
 
 RosbridgeProtocolHandlerBase::RosbridgeProtocolHandlerBase(roscpp_message_reflection::NodeHandle& nh,
 							   RosbridgeTransport *transport)
-  : nh_(nh), transport_(transport) {}
+  : nh_(nh), transport_(transport), status_level_(ERROR) {}
 
 RosbridgeProtocolHandlerBase::~RosbridgeProtocolHandlerBase(){
 }
@@ -89,11 +89,19 @@ void RosbridgeProtocolHandlerBase::unsubscribe(const std::string& topic) {
   }
 }
 
+void RosbridgeProtocolHandlerBase::setStatusLevel(StatusLevel level) {
+  if(level != INVALID_LEVEL) {
+    status_level_ = level;
+  }
+}
+
 RosbridgeProtocolHandlerBase::StatusMessageStream::StatusMessageStream(RosbridgeProtocolHandlerBase* handler, StatusLevel level)
   : handler_(handler), level_(level) {}
 RosbridgeProtocolHandlerBase::StatusMessageStream::~StatusMessageStream() {
-  ROS_INFO_STREAM(levelToString(level_) << ": " << stream_.str());
-  handler_->sendStatusMessage(level_, stream_.str());
+  if(level_ <= handler_->status_level_) {
+    ROS_INFO_STREAM(levelToString(level_) << ": " << stream_.str());
+    handler_->sendStatusMessage(level_, stream_.str());
+  }
 }
 
 
