@@ -12,7 +12,7 @@ RosbridgeProtocolHandlerBase::RosbridgeProtocolHandlerBase(roscpp_message_reflec
 }
 
 void RosbridgeProtocolHandlerBase::init() {
-  keep_alive_this_ = shared_from_this();
+  keep_alive_this_ = boost::static_pointer_cast<RosbridgeProtocolHandlerBase>(shared_from_this());
   transport_->setMessageHandler(keep_alive_this_);
 }
 
@@ -65,14 +65,23 @@ roscpp_message_reflection::Publisher RosbridgeProtocolHandlerBase::getPublisher(
   }
 }
 
+static void weak_onSubscribeCallback(boost::weak_ptr<RosbridgeProtocolHandlerBase> this_weak, const std::string& topic,
+			 const boost::shared_ptr<const roscpp_message_reflection::Message>& message) {
+  boost::shared_ptr<RosbridgeProtocolHandlerBase> this_ = this_weak.lock();
+  if(this_) {
+    this_->onSubscribeCallback(topic, message);
+  }
+}
+
 void RosbridgeProtocolHandlerBase::subscribe(const std::string& topic, const std::string& type) {
   if(subscribers_.find(topic) != subscribers_.end()) { // already subscribed
     StatusMessageStream(this, WARNING) << topic << " is already subscribed";
     // TODO handle all cases here (same type, etc)
   }
   else {
+    boost::weak_ptr<RosbridgeProtocolHandlerBase> weak_this(keep_alive_this_);
     roscpp_message_reflection::Subscriber subscriber = nh_.subscribe(topic, type,
-            boost::bind(&RosbridgeProtocolHandlerBase::onSubscribeCallback, this, topic, _1));
+            boost::bind(weak_onSubscribeCallback, weak_this, topic, _1));
     if(subscriber) {
       StatusMessageStream(this, INFO) << "Subscribing: topic=" << topic << ", type=" << type;
       subscribers_[topic] = subscriber;

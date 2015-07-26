@@ -102,7 +102,7 @@ protected:
 
 private:
   StatusLevel status_level_;
-  boost::shared_ptr<RosbridgeProtocolHandler> keep_alive_this_;
+  boost::shared_ptr<RosbridgeProtocolHandlerBase> keep_alive_this_;
   void messageCallback(const boost::shared_ptr<const roscpp_message_reflection::Message>& message);
 
 private:
