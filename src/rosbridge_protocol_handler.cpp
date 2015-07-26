@@ -40,7 +40,7 @@ void RosbridgeProtocolHandlerBase::advertise(const std::string& topic, const std
       publishers_[topic] = publisher;
     }
     else {
-      StatusMessageStream(this, WARNING, id) << "Failed to advertise: topic=" << topic << ", type=" << type;
+      StatusMessageStream(this, ERROR, id) << "Failed to advertise: topic=" << topic << ", type=" << type;
     }
   }
 }
@@ -48,7 +48,7 @@ void RosbridgeProtocolHandlerBase::advertise(const std::string& topic, const std
 void RosbridgeProtocolHandlerBase::unadvertise(const std::string& topic, const std::string& id) {
   size_t num_removed = publishers_.erase(topic);
   if(num_removed == 0) {
-    StatusMessageStream(this, WARNING, id) << topic << " is not advertised";
+    StatusMessageStream(this, ERROR, id) << topic << " is not advertised";
   }
   else {
     StatusMessageStream(this, INFO, id) << "Unadvertising: topic=" << topic;
@@ -87,7 +87,7 @@ void RosbridgeProtocolHandlerBase::subscribe(const std::string& topic, const std
       subscribers_[topic] = subscriber;
     }
     else {
-      StatusMessageStream(this, WARNING, id) << "Failed to subscribe: topic=" << topic << ", type=" << type;
+      StatusMessageStream(this, ERROR, id) << "Failed to subscribe: topic=" << topic << ", type=" << type;
     }
   }
 }
@@ -95,7 +95,7 @@ void RosbridgeProtocolHandlerBase::subscribe(const std::string& topic, const std
 void RosbridgeProtocolHandlerBase::unsubscribe(const std::string& topic, const std::string& id) {
   size_t num_removed = subscribers_.erase(topic);
   if(num_removed == 0) {
-    StatusMessageStream(this, WARNING, id) << topic << " is not subscribed";
+    StatusMessageStream(this, ERROR, id) << topic << " is not subscribed";
   }
   else {
     StatusMessageStream(this, INFO, id) << "Unsubscribing: topic=" << topic;

@@ -203,7 +203,7 @@ void JsonRosbridgeProtocolHandler::onMessage(const Json::Value& json_msg) {
       pub.publish(msg);
     }
     else {
-      StatusMessageStream(this, WARNING, id) << topic << " is not advertised";
+      StatusMessageStream(this, ERROR, id) << topic << " is not advertised";
     }
   }
   else if(op == "subscribe") {
