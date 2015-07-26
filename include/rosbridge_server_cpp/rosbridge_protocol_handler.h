@@ -66,11 +66,11 @@ public:
   virtual void close();
   void onClose();
 
-  void advertise(const std::string& topic, const std::string& type);
-  void unadvertise(const std::string& topic);
-  void subscribe(const std::string& topic, const std::string& type);
-  void unsubscribe(const std::string& topic);
-  void setStatusLevel(StatusLevel level);
+  void advertise(const std::string& topic, const std::string& type, const std::string& id);
+  void unadvertise(const std::string& topic, const std::string& id);
+  void subscribe(const std::string& topic, const std::string& type, const std::string& id);
+  void unsubscribe(const std::string& topic, const std::string& id);
+  void setStatusLevel(StatusLevel level, const std::string& id);
 
   virtual void onSubscribeCallback(const std::string& topic,
           const boost::shared_ptr<const roscpp_message_reflection::Message>& message) = 0;
@@ -78,11 +78,11 @@ public:
   roscpp_message_reflection::Publisher getPublisher(const std::string& topic);
 
 protected:
-  virtual void sendStatusMessage(StatusLevel level, const std::string& msg) = 0;
+  virtual void sendStatusMessage(StatusLevel level, const std::string& id, const std::string& msg) = 0;
 
   class StatusMessageStream {
   public:
-    StatusMessageStream(RosbridgeProtocolHandlerBase* handler, StatusLevel level);
+    StatusMessageStream(RosbridgeProtocolHandlerBase* handler, StatusLevel level, const std::string& id);
     ~StatusMessageStream();
 
     template <class T>
@@ -93,6 +93,7 @@ protected:
   private:
     RosbridgeProtocolHandlerBase* handler_;
     StatusLevel level_;
+    const std::string& id_;
     std::stringstream stream_;
   };
 

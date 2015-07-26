@@ -17,7 +17,6 @@ public:
   ~WebsocketTransport();
 
   virtual void sendMessage(const Buffer& msg);
-  virtual void close();
 
 private:
   async_web_server_cpp::WebsocketConnectionPtr websocket_;

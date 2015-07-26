@@ -27,31 +27,31 @@ void RosbridgeProtocolHandlerBase::onClose() {
 void RosbridgeProtocolHandlerBase::close() {
   keep_alive_this_.reset(); // may result in destructor call
 }
-
-void RosbridgeProtocolHandlerBase::advertise(const std::string& topic, const std::string& type) {
+// TODO kep track of ids for publishers and subscribers
+void RosbridgeProtocolHandlerBase::advertise(const std::string& topic, const std::string& type, const std::string& id) {
   if(publishers_.find(topic) != publishers_.end()) { // already advertised
-    StatusMessageStream(this, WARNING) << topic << " is already advertised";
+    StatusMessageStream(this, WARNING, id) << topic << " is already advertised";
     // TODO handle all cases here (same type, etc)
   }
   else {
     roscpp_message_reflection::Publisher publisher = nh_.advertise(topic, type);
     if(publisher) {
-      StatusMessageStream(this, INFO) << "Publishing: topic=" << topic << ", type=" << type;
+      StatusMessageStream(this, INFO, id) << "Publishing: topic=" << topic << ", type=" << type;
       publishers_[topic] = publisher;
     }
     else {
-      StatusMessageStream(this, WARNING) << "Failed to advertise: topic=" << topic << ", type=" << type;
+      StatusMessageStream(this, WARNING, id) << "Failed to advertise: topic=" << topic << ", type=" << type;
     }
   }
 }
 
-void RosbridgeProtocolHandlerBase::unadvertise(const std::string& topic) {
+void RosbridgeProtocolHandlerBase::unadvertise(const std::string& topic, const std::string& id) {
   size_t num_removed = publishers_.erase(topic);
   if(num_removed == 0) {
-    StatusMessageStream(this, WARNING) << topic << " is not advertised";
+    StatusMessageStream(this, WARNING, id) << topic << " is not advertised";
   }
   else {
-    StatusMessageStream(this, INFO) << "Unadvertising: topic=" << topic;
+    StatusMessageStream(this, INFO, id) << "Unadvertising: topic=" << topic;
   }
 }
 
@@ -73,9 +73,9 @@ static void weak_onSubscribeCallback(boost::weak_ptr<RosbridgeProtocolHandlerBas
   }
 }
 
-void RosbridgeProtocolHandlerBase::subscribe(const std::string& topic, const std::string& type) {
+void RosbridgeProtocolHandlerBase::subscribe(const std::string& topic, const std::string& type, const std::string& id) {
   if(subscribers_.find(topic) != subscribers_.end()) { // already subscribed
-    StatusMessageStream(this, WARNING) << topic << " is already subscribed";
+    StatusMessageStream(this, WARNING, id) << topic << " is already subscribed";
     // TODO handle all cases here (same type, etc)
   }
   else {
@@ -83,37 +83,38 @@ void RosbridgeProtocolHandlerBase::subscribe(const std::string& topic, const std
     roscpp_message_reflection::Subscriber subscriber = nh_.subscribe(topic, type,
             boost::bind(weak_onSubscribeCallback, weak_this, topic, _1));
     if(subscriber) {
-      StatusMessageStream(this, INFO) << "Subscribing: topic=" << topic << ", type=" << type;
+      StatusMessageStream(this, INFO, id) << "Subscribing: topic=" << topic << ", type=" << type;
       subscribers_[topic] = subscriber;
     }
     else {
-      StatusMessageStream(this, WARNING) << "Failed to subscribe: topic=" << topic << ", type=" << type;
+      StatusMessageStream(this, WARNING, id) << "Failed to subscribe: topic=" << topic << ", type=" << type;
     }
   }
 }
 
-void RosbridgeProtocolHandlerBase::unsubscribe(const std::string& topic) {
+void RosbridgeProtocolHandlerBase::unsubscribe(const std::string& topic, const std::string& id) {
   size_t num_removed = subscribers_.erase(topic);
   if(num_removed == 0) {
-    StatusMessageStream(this, WARNING) << topic << " is not subscribed";
+    StatusMessageStream(this, WARNING, id) << topic << " is not subscribed";
   }
   else {
-    StatusMessageStream(this, INFO) << "Unsubscribing: topic=" << topic;
+    StatusMessageStream(this, INFO, id) << "Unsubscribing: topic=" << topic;
   }
 }
 
-void RosbridgeProtocolHandlerBase::setStatusLevel(StatusLevel level) {
+void RosbridgeProtocolHandlerBase::setStatusLevel(StatusLevel level, const std::string& id) {
   if(level != INVALID_LEVEL) {
     status_level_ = level;
   }
 }
 
-RosbridgeProtocolHandlerBase::StatusMessageStream::StatusMessageStream(RosbridgeProtocolHandlerBase* handler, StatusLevel level)
-  : handler_(handler), level_(level) {}
+RosbridgeProtocolHandlerBase::StatusMessageStream::StatusMessageStream(RosbridgeProtocolHandlerBase* handler, StatusLevel level,
+								       const std::string& id)
+  : handler_(handler), level_(level), id_(id) {}
 RosbridgeProtocolHandlerBase::StatusMessageStream::~StatusMessageStream() {
   if(level_ <= handler_->status_level_) {
     ROS_INFO_STREAM(levelToString(level_) << ": " << stream_.str());
-    handler_->sendStatusMessage(level_, stream_.str());
+    handler_->sendStatusMessage(level_, id_, stream_.str());
   }
 }
 

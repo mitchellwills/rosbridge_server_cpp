@@ -30,7 +30,6 @@ public:
   void setMessageHandler(boost::shared_ptr<MessageHandler> handler);
 
   virtual void sendMessage(const Buffer& msg) = 0;
-  virtual void close() = 0;
 
 protected:
   void dispatchOnMessage(const Buffer& msg);

@@ -11,19 +11,9 @@ WebsocketTransport::~WebsocketTransport() {
 }
 
 void WebsocketTransport::sendMessage(const Buffer& msg) {
-  // save a copy in case close is called
-  async_web_server_cpp::WebsocketConnectionPtr websocket = websocket_;
-  if(!websocket)
-    return;
   std::string msg_string(msg.data(), msg.size());
-
-  websocket->sendTextMessage(msg_string);
+  websocket_->sendTextMessage(msg_string);
 }
-
-void WebsocketTransport::close() {
-  websocket_->close();
-}
-
 
 WebsocketTransportServer::WebsocketTransportServer(const std::string &address, const std::string &port)
   : handler_group_(async_web_server_cpp::HttpReply::stock_reply(async_web_server_cpp::HttpReply::not_found)) {

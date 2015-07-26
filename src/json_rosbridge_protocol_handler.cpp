@@ -155,11 +155,13 @@ void JsonRosbridgeProtocolHandler::onSubscribeCallback(const std::string& topic,
   sendMessage(json_msg);
 }
 
-void JsonRosbridgeProtocolHandler::sendStatusMessage(StatusLevel level, const std::string& msg) {
+void JsonRosbridgeProtocolHandler::sendStatusMessage(StatusLevel level, const std::string& id, const std::string& msg) {
   Json::Value json_msg;
   json_msg["op"] = "status";
   json_msg["level"] = levelToString(level);
   json_msg["msg"] = msg;
+  if(!id.empty())
+    json_msg["id"] = id;
   sendMessage(json_msg);
 }
 
@@ -177,17 +179,18 @@ void JsonRosbridgeProtocolHandler::onMessage(const Buffer& buf) {
     onMessage(msg);
   }
   else {
-    StatusMessageStream(this, ERROR) << "Error parsing message: " << reader.getFormattedErrorMessages();
+    StatusMessageStream(this, ERROR, "") << "Error parsing message: " << reader.getFormattedErrorMessages();
   }
 }
 
 void JsonRosbridgeProtocolHandler::onMessage(const Json::Value& json_msg) {
   std::string op = json_msg["op"].asString();
+  std::string id = json_msg["id"].asString();
   if(op == "advertise") {
-    advertise(json_msg["topic"].asString(), json_msg["type"].asString());
+    advertise(json_msg["topic"].asString(), json_msg["type"].asString(), id);
   }
   else if(op == "unadvertise") {
-    unadvertise(json_msg["topic"].asString());
+    unadvertise(json_msg["topic"].asString(), id);
   }
   else if(op == "publish") {
     std::string topic = json_msg["topic"].asString();
@@ -196,23 +199,31 @@ void JsonRosbridgeProtocolHandler::onMessage(const Json::Value& json_msg) {
       roscpp_message_reflection::Message msg = pub.createMessage();
       JsonValueAssignerVisitor root_visitor(json_msg["msg"]);
       root_visitor(msg);
+      // TODO handle publish special cases
       pub.publish(msg);
     }
     else {
-      StatusMessageStream(this, WARNING) << topic << " is not advertised";
+      StatusMessageStream(this, WARNING, id) << topic << " is not advertised";
     }
   }
   else if(op == "subscribe") {
-    subscribe(json_msg["topic"].asString(), json_msg["type"].asString());
+    subscribe(json_msg["topic"].asString(), json_msg["type"].asString(), id);
   }
   else if(op == "unsubscribe") {
-    unsubscribe(json_msg["topic"].asString());
+    unsubscribe(json_msg["topic"].asString(), id);
   }
   else if(op == "set_level") {
-    setStatusLevel(stringToLevel(json_msg["level"].asString()));
+    std::string level_str = json_msg["level"].asString();
+    StatusLevel level = stringToLevel(level_str);
+    if(level == INVALID_LEVEL) {
+      StatusMessageStream(this, ERROR, id) << "Bad status level: " << level_str;
+    }
+    else {
+      setStatusLevel(level, id);
+    }
   }
   else {
-    StatusMessageStream(this, ERROR) << "Unsupported operation: " << op;
+    StatusMessageStream(this, ERROR, id) << "Unsupported operation: " << op;
   }
 }
 

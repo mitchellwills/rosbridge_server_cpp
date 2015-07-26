@@ -16,7 +16,7 @@ public:
   virtual void onSubscribeCallback(const std::string& topic,
           const boost::shared_ptr<const roscpp_message_reflection::Message>& message);
 
-  virtual void sendStatusMessage(StatusLevel level, const std::string& msg);
+  virtual void sendStatusMessage(StatusLevel level, const std::string& id, const std::string& msg);
 
 private:
   void onMessage(const Json::Value& msg);
