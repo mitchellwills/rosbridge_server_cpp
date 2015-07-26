@@ -8,7 +8,7 @@ RosbridgeProtocolHandler::~RosbridgeProtocolHandler(){
 
 RosbridgeProtocolHandlerBase::RosbridgeProtocolHandlerBase(roscpp_message_reflection::NodeHandle& nh,
 							   boost::shared_ptr<RosbridgeTransport>& transport)
-  : nh_(nh), transport_(transport), status_level_(INFO) {
+  : nh_(nh), transport_(transport), status_level_(ERROR) {
 }
 
 void RosbridgeProtocolHandlerBase::init() {
