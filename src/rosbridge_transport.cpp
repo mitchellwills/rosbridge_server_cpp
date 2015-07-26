@@ -1,5 +1,4 @@
 #include "rosbridge_server_cpp/rosbridge_transport.h"
-#include <boost/thread/lock_guard.hpp>
 
 namespace rosbridge_server_cpp {
 
@@ -26,7 +25,7 @@ void RosbridgeTransport::dispatchOnClose() {
 RosbridgeTransportServer::RosbridgeTransportServer() {}
 
 void RosbridgeTransportServer::setClientHandler(ClientHandler *handler) {
-  boost::lock_guard<boost::mutex> lock(mutex_);
+  boost::unique_lock<boost::mutex> lock(mutex_);
   client_handler_ = handler;
 }
 
@@ -37,7 +36,7 @@ public:
 };
 
 void RosbridgeTransportServer::dispatchOnClient(boost::shared_ptr<RosbridgeTransport> transport) {
-  boost::lock_guard<boost::mutex> lock(mutex_);
+  boost::unique_lock<boost::mutex> lock(mutex_);
   if(client_handler_) {
     client_handler_->onClient(transport);
   }
