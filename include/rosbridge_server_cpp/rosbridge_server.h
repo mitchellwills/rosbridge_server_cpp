@@ -13,8 +13,7 @@ class RosbridgeClient;
 
 class RosbridgeServer : public ClientHandler {
 public:
-  RosbridgeServer(ros::NodeHandle& nh);
-  void init(RosbridgeTransportServer *transport_server);
+  RosbridgeServer(ros::NodeHandle& nh, RosbridgeTransportServer *transport_server);
   ~RosbridgeServer();
 
 private:
@@ -22,7 +21,7 @@ private:
   boost::scoped_ptr<RosbridgeTransportServer> transport_server_;
   WeakCollection<RosbridgeProtocolHandler> active_clients_;
 
-  boost::shared_ptr<MessageHandler> onClient(RosbridgeTransport *transport);
+  void onClient(boost::shared_ptr<RosbridgeTransport>& transport);
 };
 
 }

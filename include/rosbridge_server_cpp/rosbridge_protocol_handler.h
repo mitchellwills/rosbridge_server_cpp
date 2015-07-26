@@ -51,14 +51,17 @@ public:
 
 
   virtual ~RosbridgeProtocolHandler();
+  virtual void init() = 0;
   virtual void close() = 0;
 };
 
 class RosbridgeProtocolHandlerBase : public RosbridgeProtocolHandler {
 public:
   RosbridgeProtocolHandlerBase(roscpp_message_reflection::NodeHandle& nh,
-			       RosbridgeTransport *transport);
+			       boost::shared_ptr<RosbridgeTransport>& transport);
   virtual ~RosbridgeProtocolHandlerBase();
+
+  virtual void init();
 
   virtual void close();
   void onClose();
@@ -96,9 +99,10 @@ protected:
 protected:
   roscpp_message_reflection::NodeHandle nh_;
   boost::shared_ptr<RosbridgeTransport> transport_;
-  StatusLevel status_level_;
 
 private:
+  StatusLevel status_level_;
+  boost::shared_ptr<RosbridgeProtocolHandler> keep_alive_this_;
   void messageCallback(const boost::shared_ptr<const roscpp_message_reflection::Message>& message);
 
 private:

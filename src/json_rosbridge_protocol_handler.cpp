@@ -138,7 +138,7 @@ private:
 };
 
 JsonRosbridgeProtocolHandler::JsonRosbridgeProtocolHandler(roscpp_message_reflection::NodeHandle& nh,
-							   RosbridgeTransport *transport)
+							   boost::shared_ptr<RosbridgeTransport>& transport)
   : RosbridgeProtocolHandlerBase(nh, transport) {}
 
 JsonRosbridgeProtocolHandler::~JsonRosbridgeProtocolHandler() {}

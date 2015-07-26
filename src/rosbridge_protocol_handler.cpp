@@ -7,10 +7,17 @@ RosbridgeProtocolHandler::~RosbridgeProtocolHandler(){
 }
 
 RosbridgeProtocolHandlerBase::RosbridgeProtocolHandlerBase(roscpp_message_reflection::NodeHandle& nh,
-							   RosbridgeTransport *transport)
-  : nh_(nh), transport_(transport), status_level_(ERROR) {}
+							   boost::shared_ptr<RosbridgeTransport>& transport)
+  : nh_(nh), transport_(transport), status_level_(INFO) {
+}
+
+void RosbridgeProtocolHandlerBase::init() {
+  keep_alive_this_ = shared_from_this();
+  transport_->setMessageHandler(keep_alive_this_);
+}
 
 RosbridgeProtocolHandlerBase::~RosbridgeProtocolHandlerBase(){
+  close();
 }
 
 void RosbridgeProtocolHandlerBase::onClose() {
@@ -18,10 +25,7 @@ void RosbridgeProtocolHandlerBase::onClose() {
 }
 
 void RosbridgeProtocolHandlerBase::close() {
-  transport_->close();
-  transport_.reset();
-  subscribers_.clear();
-  publishers_.clear();
+  keep_alive_this_.reset(); // may result in destructor call
 }
 
 void RosbridgeProtocolHandlerBase::advertise(const std::string& topic, const std::string& type) {

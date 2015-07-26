@@ -10,8 +10,7 @@ int main(int argc, char** argv) {
   ros::NodeHandle pnh("~");
 
   {
-    boost::shared_ptr<RosbridgeServer> server_(new RosbridgeServer(nh));
-    server_->init(new WebsocketTransportServer("0.0.0.0", "9090"));
+    RosbridgeServer server(nh, new WebsocketTransportServer("0.0.0.0", "9090"));
 
     ros::spin();
   }

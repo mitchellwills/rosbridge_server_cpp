@@ -9,7 +9,7 @@
 
 namespace rosbridge_server_cpp {
 
-class WebsocketMessageHandlerWrapper;
+class WebsocketTransportWrapper;
 
 class WebsocketTransport : public RosbridgeTransport {
 public:
@@ -22,13 +22,15 @@ public:
 private:
   async_web_server_cpp::WebsocketConnectionPtr websocket_;
 
-  friend class WebsocketMessageHandlerWrapper;
+  friend class WebsocketTransportWrapper;
 };
 
 class WebsocketTransportServer : public RosbridgeTransportServer {
 public:
   WebsocketTransportServer(const std::string &address, const std::string &port);
   ~WebsocketTransportServer();
+
+  virtual void stop();
 
 private:
   async_web_server_cpp::WebsocketConnection::MessageHandler handleNewClient(const async_web_server_cpp::HttpRequest& request,

@@ -6,9 +6,9 @@ namespace rosbridge_server_cpp {
 
 WebsocketTransport::WebsocketTransport(async_web_server_cpp::WebsocketConnectionPtr websocket)
   : websocket_(websocket) {}
-  WebsocketTransport::~WebsocketTransport() {
-    printf("transport destruction\n");
-  }
+
+WebsocketTransport::~WebsocketTransport() {
+}
 
 void WebsocketTransport::sendMessage(const Buffer& msg) {
   // save a copy in case close is called
@@ -18,12 +18,10 @@ void WebsocketTransport::sendMessage(const Buffer& msg) {
   std::string msg_string(msg.data(), msg.size());
 
   websocket->sendTextMessage(msg_string);
-  //std::cout << msg_string << std::endl;
 }
 
 void WebsocketTransport::close() {
   websocket_->close();
-  websocket_.reset();
 }
 
 
@@ -37,32 +35,39 @@ WebsocketTransportServer::WebsocketTransportServer(const std::string &address, c
 }
 
 WebsocketTransportServer::~WebsocketTransportServer() {
+  stop();
+}
+
+void WebsocketTransportServer::stop() {
   server_->stop();
 }
 
-class WebsocketMessageHandlerWrapper {
+class WebsocketTransportWrapper {
 public:
-  WebsocketMessageHandlerWrapper(boost::shared_ptr<MessageHandler> handler) : handler_(handler) {}
+  WebsocketTransportWrapper(boost::shared_ptr<WebsocketTransport> transport) : transport_weak_(transport) {}
 
   void operator()(const async_web_server_cpp::WebsocketMessage& message) {
+    boost::shared_ptr<WebsocketTransport> transport = transport_weak_.lock();
     if(message.type == async_web_server_cpp::WebsocketMessage::type_text) {
-      handler_->onMessage(message.content);
+      transport->dispatchOnMessage(message.content);
     }
     else if(message.type == async_web_server_cpp::WebsocketMessage::type_close) {
-      handler_->onClose();
+      transport->dispatchOnClose();
     }
     else {
       ROS_WARN_STREAM("Unexpected websocket message type: " << message.type << ": " << message.content);
     }
   }
 private:
-  boost::shared_ptr<MessageHandler> handler_;
+  boost::weak_ptr<WebsocketTransport> transport_weak_;
 };
 
 async_web_server_cpp::WebsocketConnection::MessageHandler
 WebsocketTransportServer::handleNewClient(const async_web_server_cpp::HttpRequest& request,
 					  async_web_server_cpp::WebsocketConnectionPtr websocket) {
-  return WebsocketMessageHandlerWrapper(dispatchOnClient(new WebsocketTransport(websocket)));
+  boost::shared_ptr<WebsocketTransport> transport(new WebsocketTransport(websocket));
+  dispatchOnClient(transport);
+  return WebsocketTransportWrapper(transport);
 }
 
 }

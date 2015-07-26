@@ -9,7 +9,7 @@ namespace rosbridge_server_cpp {
 class JsonRosbridgeProtocolHandler : public RosbridgeProtocolHandlerBase {
 public:
   JsonRosbridgeProtocolHandler(roscpp_message_reflection::NodeHandle& nh,
-			       RosbridgeTransport *transport);
+			       boost::shared_ptr<RosbridgeTransport>& transport);
   virtual ~JsonRosbridgeProtocolHandler();
 
   virtual void onMessage(const Buffer& buf);
