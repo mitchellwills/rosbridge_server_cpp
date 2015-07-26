@@ -82,6 +82,8 @@ public:
   void unadvertise(const std::string& topic, const std::string& id);
   void subscribe(const std::string& topic, const std::string& type, const std::string& id, const SubscribeOptions& options);
   void unsubscribe(const std::string& topic, const std::string& id);
+  roscpp_message_reflection::ServiceClient getServiceClient(const std::string& service,
+							    const std::string& type);
   void setStatusLevel(StatusLevel level, const std::string& id);
 
   virtual void onSubscribeCallback(const std::string& topic,

@@ -33,6 +33,7 @@ public:
   }
   void operator()(const roscpp_message_reflection::Message& value) const
   {
+    json_value_ = Json::Value(Json::objectValue);
     BOOST_FOREACH(const roscpp_message_reflection::Message::FieldEntry& entry, value) {
       entry.value.visit(JsonValueAssignmentVisitor(json_value_[entry.name]));
     }
@@ -40,6 +41,7 @@ public:
   template <typename T>
   void operator()(const roscpp_message_reflection::ValueArray<T>& array) const
   {
+    json_value_ = Json::Value(Json::arrayValue);
     for(Json::ArrayIndex i = 0; i < (Json::ArrayIndex)array.size(); ++i) {
       JsonValueAssignmentVisitor root_visitor(json_value_[i]);
       root_visitor(array[i]);
@@ -47,6 +49,7 @@ public:
   }
   void operator()(const roscpp_message_reflection::MessageArray& array) const
   {
+    json_value_ = Json::Value(Json::arrayValue);
     for(Json::ArrayIndex i = 0; i < (Json::ArrayIndex)array.size(); ++i) {
       JsonValueAssignmentVisitor root_visitor(json_value_[i]);
       root_visitor(array[i]);
@@ -242,6 +245,32 @@ void JsonRosbridgeProtocolHandler::onMessage(const Json::Value& json_msg) {
   }
   else if(op == "unsubscribe") {
     unsubscribe(json_msg["topic"].asString(), id);
+  }
+  else if(op == "call_service") {
+    std::string service = json_msg["service"].asString();
+    std::string type = json_msg["type"].asString();
+    std::string id = json_msg["id"].asString();
+    roscpp_message_reflection::ServiceClient client = getServiceClient(service, type);
+    if(client) {
+      roscpp_message_reflection::Message request = client.createRequestMessage();
+      JsonValueAssignerVisitor request_root_visitor(json_msg["args"]);
+      request_root_visitor(request);
+      roscpp_message_reflection::Message response = client.createResponseMessage();
+      bool result = client.call(request, &response);
+
+      // Send back the result
+      Json::Value json_response_msg;
+      json_response_msg["op"] = "service_response";
+      json_response_msg["service"] = service;
+      json_response_msg["id"] = id;
+      json_response_msg["result"] = result;
+      JsonValueAssignmentVisitor response_root_visitor(json_response_msg["values"]);
+      response_root_visitor(response);
+      sendMessage(json_response_msg, MessageSendOptions());
+    }
+    else {
+      StatusMessageStream(this, ERROR, id) << "Could not create service client: " << service;
+    }
   }
   else if(op == "set_level") {
     std::string level_str = json_msg["level"].asString();

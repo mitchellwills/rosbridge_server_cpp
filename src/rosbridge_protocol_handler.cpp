@@ -111,6 +111,11 @@ void RosbridgeProtocolHandlerBase::unsubscribe(const std::string& topic, const s
   }
 }
 
+roscpp_message_reflection::ServiceClient RosbridgeProtocolHandlerBase::getServiceClient(const std::string& service,
+											const std::string& type) {
+  return nh_.serviceClient(service, type);
+}
+
 void RosbridgeProtocolHandlerBase::setStatusLevel(StatusLevel level, const std::string& id) {
   if(level != INVALID_LEVEL) {
     status_level_ = level;
