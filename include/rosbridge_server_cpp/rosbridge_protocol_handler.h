@@ -55,6 +55,18 @@ public:
   virtual void close() = 0;
 };
 
+struct MessageSendOptions {
+  MessageSendOptions() : compression("none") {}
+  std::string compression;
+};
+
+struct PublishOptions {
+};
+
+struct SubscribeOptions {
+  MessageSendOptions message_send;
+};
+
 class RosbridgeProtocolHandlerBase : public RosbridgeProtocolHandler {
 public:
   RosbridgeProtocolHandlerBase(roscpp_message_reflection::NodeHandle& nh,
@@ -66,14 +78,15 @@ public:
   virtual void close();
   void onClose();
 
-  void advertise(const std::string& topic, const std::string& type, const std::string& id);
+  void advertise(const std::string& topic, const std::string& type, const std::string& id, const PublishOptions& options);
   void unadvertise(const std::string& topic, const std::string& id);
-  void subscribe(const std::string& topic, const std::string& type, const std::string& id);
+  void subscribe(const std::string& topic, const std::string& type, const std::string& id, const SubscribeOptions& options);
   void unsubscribe(const std::string& topic, const std::string& id);
   void setStatusLevel(StatusLevel level, const std::string& id);
 
   virtual void onSubscribeCallback(const std::string& topic,
-          const boost::shared_ptr<const roscpp_message_reflection::Message>& message) = 0;
+				   const boost::shared_ptr<const roscpp_message_reflection::Message>& message,
+				   const MessageSendOptions& options) = 0;
 
   roscpp_message_reflection::Publisher getPublisher(const std::string& topic);
 
@@ -107,8 +120,18 @@ private:
   void messageCallback(const boost::shared_ptr<const roscpp_message_reflection::Message>& message);
 
 private:
-  std::map<std::string, roscpp_message_reflection::Publisher> publishers_;
-  std::map<std::string, roscpp_message_reflection::Subscriber> subscribers_;
+  struct PublisherInfo {
+    roscpp_message_reflection::Publisher publisher;
+    PublishOptions options;
+  };
+
+  struct SubscriberInfo {
+    roscpp_message_reflection::Subscriber subscriber;
+    SubscribeOptions options;
+  };
+
+  std::map<std::string, PublisherInfo> publishers_;
+  std::map<std::string, SubscriberInfo> subscribers_;
 };
 
 }

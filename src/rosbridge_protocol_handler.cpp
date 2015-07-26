@@ -28,7 +28,8 @@ void RosbridgeProtocolHandlerBase::close() {
   keep_alive_this_.reset(); // may result in destructor call
 }
 // TODO kep track of ids for publishers and subscribers
-void RosbridgeProtocolHandlerBase::advertise(const std::string& topic, const std::string& type, const std::string& id) {
+void RosbridgeProtocolHandlerBase::advertise(const std::string& topic, const std::string& type, const std::string& id,
+					     const PublishOptions& options) {
   if(publishers_.find(topic) != publishers_.end()) { // already advertised
     StatusMessageStream(this, WARNING, id) << topic << " is already advertised";
     // TODO handle all cases here (same type, etc)
@@ -37,7 +38,10 @@ void RosbridgeProtocolHandlerBase::advertise(const std::string& topic, const std
     roscpp_message_reflection::Publisher publisher = nh_.advertise(topic, type);
     if(publisher) {
       StatusMessageStream(this, INFO, id) << "Publishing: topic=" << topic << ", type=" << type;
-      publishers_[topic] = publisher;
+      PublisherInfo info;
+      info.publisher = publisher;
+      info.options = options;
+      publishers_[topic] = info;
     }
     else {
       StatusMessageStream(this, ERROR, id) << "Failed to advertise: topic=" << topic << ", type=" << type;
@@ -56,24 +60,26 @@ void RosbridgeProtocolHandlerBase::unadvertise(const std::string& topic, const s
 }
 
 roscpp_message_reflection::Publisher RosbridgeProtocolHandlerBase::getPublisher(const std::string& topic) {
-  std::map<std::string, roscpp_message_reflection::Publisher>::iterator itr = publishers_.find(topic);
+  std::map<std::string, PublisherInfo>::iterator itr = publishers_.find(topic);
   if(itr == publishers_.end()) { // not advertised
     return roscpp_message_reflection::Publisher();
   }
   else {
-    return itr->second;
+    return itr->second.publisher;
   }
 }
 
 static void weak_onSubscribeCallback(boost::weak_ptr<RosbridgeProtocolHandlerBase> this_weak, const std::string& topic,
-			 const boost::shared_ptr<const roscpp_message_reflection::Message>& message) {
+				     const SubscribeOptions& options,
+				     const boost::shared_ptr<const roscpp_message_reflection::Message>& message) {
   boost::shared_ptr<RosbridgeProtocolHandlerBase> this_ = this_weak.lock();
   if(this_) {
-    this_->onSubscribeCallback(topic, message);
+    this_->onSubscribeCallback(topic, message, options.message_send);
   }
 }
 
-void RosbridgeProtocolHandlerBase::subscribe(const std::string& topic, const std::string& type, const std::string& id) {
+void RosbridgeProtocolHandlerBase::subscribe(const std::string& topic, const std::string& type, const std::string& id,
+					     const SubscribeOptions& options) {
   if(subscribers_.find(topic) != subscribers_.end()) { // already subscribed
     StatusMessageStream(this, WARNING, id) << topic << " is already subscribed";
     // TODO handle all cases here (same type, etc)
@@ -81,10 +87,13 @@ void RosbridgeProtocolHandlerBase::subscribe(const std::string& topic, const std
   else {
     boost::weak_ptr<RosbridgeProtocolHandlerBase> weak_this(keep_alive_this_);
     roscpp_message_reflection::Subscriber subscriber = nh_.subscribe(topic, type,
-            boost::bind(weak_onSubscribeCallback, weak_this, topic, _1));
+            boost::bind(weak_onSubscribeCallback, weak_this, topic, options, _1));
     if(subscriber) {
       StatusMessageStream(this, INFO, id) << "Subscribing: topic=" << topic << ", type=" << type;
-      subscribers_[topic] = subscriber;
+      SubscriberInfo info;
+      info.subscriber = subscriber;
+      info.options = options;
+      subscribers_[topic] = info;
     }
     else {
       StatusMessageStream(this, ERROR, id) << "Failed to subscribe: topic=" << topic << ", type=" << type;

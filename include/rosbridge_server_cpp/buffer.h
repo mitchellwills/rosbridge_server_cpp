@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <string>
+#include <vector>
 
 namespace rosbridge_server_cpp {
 
@@ -13,6 +14,9 @@ class Buffer {
 public:
   Buffer(const std::string& str)
     : buffer_(str.data()), size_(str.size()) {}
+
+  Buffer(const std::vector<char>& vec)
+    : buffer_(&vec.front()), size_(vec.size()) {}
 
   Buffer(const char * buffer, size_t size)
     : buffer_(buffer), size_(size) {}

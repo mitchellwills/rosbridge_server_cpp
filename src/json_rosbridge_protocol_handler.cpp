@@ -1,4 +1,6 @@
 #include "rosbridge_server_cpp/json_rosbridge_protocol_handler.h"
+#include "rosbridge_server_cpp/png_image.h"
+#include "rosbridge_server_cpp/base64.h"
 
 namespace rosbridge_server_cpp {
 
@@ -144,7 +146,8 @@ JsonRosbridgeProtocolHandler::JsonRosbridgeProtocolHandler(roscpp_message_reflec
 JsonRosbridgeProtocolHandler::~JsonRosbridgeProtocolHandler() {}
 
 void JsonRosbridgeProtocolHandler::onSubscribeCallback(const std::string& topic,
-					     const boost::shared_ptr<const roscpp_message_reflection::Message>& msg) {
+						       const boost::shared_ptr<const roscpp_message_reflection::Message>& msg,
+						       const MessageSendOptions& options) {
   Json::Value json_msg;
   json_msg["op"] = "publish";
   json_msg["topic"] = topic;
@@ -152,7 +155,7 @@ void JsonRosbridgeProtocolHandler::onSubscribeCallback(const std::string& topic,
   JsonValueAssignmentVisitor root_visitor(json_msg["msg"]);
   root_visitor(*msg);
 
-  sendMessage(json_msg);
+  sendMessage(json_msg, options);
 }
 
 void JsonRosbridgeProtocolHandler::sendStatusMessage(StatusLevel level, const std::string& id, const std::string& msg) {
@@ -162,14 +165,40 @@ void JsonRosbridgeProtocolHandler::sendStatusMessage(StatusLevel level, const st
   json_msg["msg"] = msg;
   if(!id.empty())
     json_msg["id"] = id;
-  sendMessage(json_msg);
+  sendMessage(json_msg, MessageSendOptions());
 }
 
-void JsonRosbridgeProtocolHandler::sendMessage(const Json::Value& msg) {
+static bool pngCompress(const Buffer& data, std::string* output) {
+  size_t width = floor(sqrt(data.size()/3.0));
+  size_t height = ceil((data.size()/3.0) / width);
+
+  PngImage image;
+  image.fromBuffer(width, height, data, '\n');
+  std::vector<char> png_image;
+  if(!image.write(&png_image))
+    return false;
+
+  base64Encode(png_image, output);
+  return true;
+}
+
+void JsonRosbridgeProtocolHandler::sendMessage(const Json::Value& msg, const MessageSendOptions& options) {
   Json::FastWriter writer;
-  boost::shared_ptr<RosbridgeTransport> transport = transport_;
-  if(transport)
-    transport->sendMessage(writer.write(msg));
+  std::string msg_str = writer.write(msg);
+  if(options.compression == "none") {
+    transport_->sendMessage(msg_str);
+  }
+  else if(options.compression == "png") {
+    Json::Value json_msg;
+    json_msg["op"] = "png";
+    std::string compress_buf;
+    pngCompress(msg_str, &compress_buf);
+    json_msg["data"] = compress_buf;
+    sendMessage(json_msg, MessageSendOptions());
+  }
+  else {
+    StatusMessageStream(this, ERROR, "") << "Unsupported compression method: " << options.compression;
+  }
 }
 
 void JsonRosbridgeProtocolHandler::onMessage(const Buffer& buf) {
@@ -187,7 +216,7 @@ void JsonRosbridgeProtocolHandler::onMessage(const Json::Value& json_msg) {
   std::string op = json_msg["op"].asString();
   std::string id = json_msg["id"].asString();
   if(op == "advertise") {
-    advertise(json_msg["topic"].asString(), json_msg["type"].asString(), id);
+    advertise(json_msg["topic"].asString(), json_msg["type"].asString(), id, PublishOptions());
   }
   else if(op == "unadvertise") {
     unadvertise(json_msg["topic"].asString(), id);
@@ -207,7 +236,9 @@ void JsonRosbridgeProtocolHandler::onMessage(const Json::Value& json_msg) {
     }
   }
   else if(op == "subscribe") {
-    subscribe(json_msg["topic"].asString(), json_msg["type"].asString(), id);
+    SubscribeOptions options;
+    options.message_send.compression = json_msg["compression"].asString();
+    subscribe(json_msg["topic"].asString(), json_msg["type"].asString(), id, options);
   }
   else if(op == "unsubscribe") {
     unsubscribe(json_msg["topic"].asString(), id);

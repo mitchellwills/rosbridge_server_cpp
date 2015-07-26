@@ -44,10 +44,12 @@
   <build_depend>roscpp</build_depend>
   <build_depend>roscpp_message_reflection</build_depend>
   <build_depend>libjsoncpp-dev</build_depend>
+  <build_depend>libpng12-dev</build_depend>
   <run_depend>async_web_server_cpp</run_depend>
   <run_depend>roscpp</run_depend>
   <run_depend>roscpp_message_reflection</run_depend>
   <run_depend>libjsoncpp-dev</run_depend>
+  <run_depend>libpng12-dev</run_depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->

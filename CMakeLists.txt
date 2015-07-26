@@ -9,6 +9,8 @@ find_package(catkin REQUIRED COMPONENTS
 
 find_package(Boost REQUIRED)
 
+find_package(PNG REQUIRED)
+
 # JsonCpp
 set(JsonCpp_INCLUDE_DIRS /usr/include/jsoncpp)
 set(JsonCpp_LIBRARIES jsoncpp)
@@ -32,6 +34,7 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${Boost_INCLUDE_DIRS}
   ${JsonCpp_INCLUDE_DIRS}
+  ${PNG_INCLUDE_DIRS}
 )
 
 
@@ -41,10 +44,13 @@ add_library(rosbridge_server_cpp
   src/rosbridge_websocket_transport.cpp
   src/rosbridge_protocol_handler.cpp
   src/json_rosbridge_protocol_handler.cpp
+  src/png_image.cpp
+  src/base64.cpp
 )
 target_link_libraries(rosbridge_server_cpp
   ${catkin_LIBRARIES}
   ${JsonCpp_LIBRARIES}
+  ${PNG_LIBRARIES}
 )
 
 
