@@ -120,12 +120,15 @@ public:
   void operator()(roscpp_message_reflection::Message& value) const
   {
     BOOST_FOREACH(roscpp_message_reflection::Message::FieldEntry& entry, value) {
-      entry.value.visit(JsonValueAssignerVisitor(json_value_[entry.name]));
+      if(json_value_.isMember(entry.name)) {
+	entry.value.visit(JsonValueAssignerVisitor(json_value_[entry.name]));
+      }
     }
   }
   template <typename T>
   void operator()(roscpp_message_reflection::ValueArray<T>& array) const
   {
+    array.resize(array.size());
     for(Json::ArrayIndex i = 0; i < (Json::ArrayIndex)array.size(); ++i) {
       JsonValueAssignerVisitor root_visitor(json_value_[i]);
       root_visitor(array[i]);
@@ -133,6 +136,7 @@ public:
   }
   void operator()(roscpp_message_reflection::MessageArray& array) const
   {
+    array.resize(array.size());
     for(Json::ArrayIndex i = 0; i < (Json::ArrayIndex)array.size(); ++i) {
       JsonValueAssignerVisitor root_visitor(json_value_[i]);
       root_visitor(array[i]);
@@ -149,8 +153,8 @@ JsonRosbridgeProtocolHandler::JsonRosbridgeProtocolHandler(roscpp_message_reflec
 JsonRosbridgeProtocolHandler::~JsonRosbridgeProtocolHandler() {}
 
 void JsonRosbridgeProtocolHandler::onSubscribeCallback(const std::string& topic,
-						       const boost::shared_ptr<const roscpp_message_reflection::Message>& msg,
-						       const MessageSendOptions& options) {
+						       const MessageSendOptions& options,
+						       const boost::shared_ptr<const roscpp_message_reflection::Message>& msg) {
   Json::Value json_msg;
   json_msg["op"] = "publish";
   json_msg["topic"] = topic;
@@ -170,6 +174,20 @@ void JsonRosbridgeProtocolHandler::sendStatusMessage(StatusLevel level, const st
     json_msg["id"] = id;
   sendMessage(json_msg, MessageSendOptions());
 }
+
+void JsonRosbridgeProtocolHandler::sendServiceServerRequest(const std::string& service, const std::string& id,
+							    const ServiceServerOptions& options,
+							    const roscpp_message_reflection::Message& request) {
+  Json::Value json_msg;
+  json_msg["op"] = "call_service";
+  json_msg["service"] = service;
+  JsonValueAssignmentVisitor root_visitor(json_msg["args"]);
+  root_visitor(request);
+  if(!id.empty())
+    json_msg["id"] = id;
+  sendMessage(json_msg, MessageSendOptions());
+}
+
 
 static bool pngCompress(const Buffer& data, std::string* output) {
   size_t width = floor(sqrt(data.size()/3.0));
@@ -270,6 +288,26 @@ void JsonRosbridgeProtocolHandler::onMessage(const Json::Value& json_msg) {
     }
     else {
       StatusMessageStream(this, ERROR, id) << "Could not create service client: " << service;
+    }
+  }
+  else if(op == "advertise_service") {
+    ServiceServerOptions options;
+    advertiseService(json_msg["service"].asString(), json_msg["type"].asString(), id, options);
+  }
+  else if(op == "unadvertise_service") {
+    unadvertiseService(json_msg["service"].asString(), id);
+  }
+  else if(op == "service_response") {
+    std::string service = json_msg["service"].asString();
+    std::string id = json_msg["id"].asString();
+    PendingServiceCallResolver resolver(this, service, id);
+    if(resolver.isActive()) {
+      JsonValueAssignerVisitor root_visitor(json_msg["values"]);
+      root_visitor(resolver.getResponseMessage());
+      resolver.resolve(json_msg["result"].asBool());
+    }
+    else {
+      StatusMessageStream(this, ERROR, id) << service << " no pending call found for call id: " << id;
     }
   }
   else if(op == "set_level") {

@@ -6,6 +6,8 @@
 #include <boost/enable_shared_from_this.hpp>
 #include <roscpp_message_reflection/node_handle.h>
 #include <roscpp_message_reflection/message.h>
+#include <boost/thread/mutex.hpp>
+#include <boost/thread/condition_variable.hpp>
 
 namespace rosbridge_server_cpp {
 
@@ -67,6 +69,9 @@ struct SubscribeOptions {
   MessageSendOptions message_send;
 };
 
+struct ServiceServerOptions {
+};
+
 class RosbridgeProtocolHandlerBase : public RosbridgeProtocolHandler {
 public:
   RosbridgeProtocolHandlerBase(roscpp_message_reflection::NodeHandle& nh,
@@ -82,13 +87,23 @@ public:
   void unadvertise(const std::string& topic, const std::string& id);
   void subscribe(const std::string& topic, const std::string& type, const std::string& id, const SubscribeOptions& options);
   void unsubscribe(const std::string& topic, const std::string& id);
+  void advertiseService(const std::string& service, const std::string& type, const std::string& id,
+			const ServiceServerOptions& options);
+  void unadvertiseService(const std::string& service, const std::string& id);
+  bool onServiceServerCallback(const std::string& service, const ServiceServerOptions& options,
+			       const roscpp_message_reflection::Message& request,
+			       roscpp_message_reflection::Message& response);
   roscpp_message_reflection::ServiceClient getServiceClient(const std::string& service,
 							    const std::string& type);
   void setStatusLevel(StatusLevel level, const std::string& id);
 
   virtual void onSubscribeCallback(const std::string& topic,
-				   const boost::shared_ptr<const roscpp_message_reflection::Message>& message,
-				   const MessageSendOptions& options) = 0;
+				   const MessageSendOptions& options,
+				   const boost::shared_ptr<const roscpp_message_reflection::Message>& message) = 0;
+  virtual void sendServiceServerRequest(const std::string& service, const std::string& id,
+					const ServiceServerOptions& options,
+					const roscpp_message_reflection::Message& request) = 0;
+
 
   roscpp_message_reflection::Publisher getPublisher(const std::string& topic);
 
@@ -132,8 +147,47 @@ private:
     SubscribeOptions options;
   };
 
+  struct ServiceServerInfo {
+    roscpp_message_reflection::ServiceServer server;
+    ServiceServerOptions options;
+  };
+
   std::map<std::string, PublisherInfo> publishers_;
   std::map<std::string, SubscriberInfo> subscribers_;
+  std::map<std::string, ServiceServerInfo> service_servers_;
+
+  struct PendingServiceCall {
+    PendingServiceCall(const std::string& id, roscpp_message_reflection::Message& response)
+      : id(id), finished(false), response(response) {}
+
+    std::string id;
+    bool finished;
+    bool result;
+    roscpp_message_reflection::Message& response;
+  };
+  typedef std::map<std::string, PendingServiceCall&> ServiceCallCollection;
+
+  boost::mutex service_server_call_mutex_;
+  boost::condition_variable service_server_call_cv_;
+  uint32_t next_service_call_id_;
+  ServiceCallCollection pending_service_calls_;
+
+protected:
+  class PendingServiceCallResolver {
+  public:
+    PendingServiceCallResolver(RosbridgeProtocolHandlerBase* handler,
+			       const std::string& service, const std::string& id);
+    ~PendingServiceCallResolver();
+
+    bool isActive() { return pending_call_; }
+    roscpp_message_reflection::Message& getResponseMessage() { return pending_call_->response; }
+    void resolve(bool result);
+  private:
+    PendingServiceCall* pending_call_;
+    RosbridgeProtocolHandlerBase* handler_;
+    boost::unique_lock<boost::mutex> lock_;
+  };
+
 };
 
 }

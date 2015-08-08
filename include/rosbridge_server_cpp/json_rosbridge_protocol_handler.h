@@ -14,10 +14,13 @@ public:
 
   virtual void onMessage(const Buffer& buf);
   virtual void onSubscribeCallback(const std::string& topic,
-				   const boost::shared_ptr<const roscpp_message_reflection::Message>& message,
-				   const MessageSendOptions& options);
+				   const MessageSendOptions& options,
+				   const boost::shared_ptr<const roscpp_message_reflection::Message>& message);
 
   virtual void sendStatusMessage(StatusLevel level, const std::string& id, const std::string& msg);
+  virtual void sendServiceServerRequest(const std::string& service, const std::string& id,
+					const ServiceServerOptions& options,
+					const roscpp_message_reflection::Message& request);
 
 private:
   void onMessage(const Json::Value& msg);

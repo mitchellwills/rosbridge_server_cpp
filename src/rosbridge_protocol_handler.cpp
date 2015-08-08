@@ -1,5 +1,6 @@
 #include "rosbridge_server_cpp/rosbridge_protocol_handler.h"
 #include "rosbridge_server_cpp/rosbridge_server.h"
+#include "boost/date_time/posix_time/posix_time_types.hpp"
 
 namespace rosbridge_server_cpp {
 
@@ -8,7 +9,7 @@ RosbridgeProtocolHandler::~RosbridgeProtocolHandler(){
 
 RosbridgeProtocolHandlerBase::RosbridgeProtocolHandlerBase(roscpp_message_reflection::NodeHandle& nh,
 							   boost::shared_ptr<RosbridgeTransport>& transport)
-  : nh_(nh), transport_(transport), status_level_(ERROR) {
+  : nh_(nh), transport_(transport), status_level_(ERROR), next_service_call_id_(0) {
 }
 
 void RosbridgeProtocolHandlerBase::init() {
@@ -74,7 +75,7 @@ static void weak_onSubscribeCallback(boost::weak_ptr<RosbridgeProtocolHandlerBas
 				     const boost::shared_ptr<const roscpp_message_reflection::Message>& message) {
   boost::shared_ptr<RosbridgeProtocolHandlerBase> this_ = this_weak.lock();
   if(this_) {
-    this_->onSubscribeCallback(topic, message, options.message_send);
+    this_->onSubscribeCallback(topic, options.message_send, message);
   }
 }
 
@@ -110,6 +111,109 @@ void RosbridgeProtocolHandlerBase::unsubscribe(const std::string& topic, const s
     StatusMessageStream(this, INFO, id) << "Unsubscribing: topic=" << topic;
   }
 }
+
+static bool weak_onServiceServerCallback(boost::weak_ptr<RosbridgeProtocolHandlerBase> this_weak, const std::string& service,
+					 const ServiceServerOptions& options,
+					 const roscpp_message_reflection::Message& request,
+					 roscpp_message_reflection::Message& response) {
+  boost::shared_ptr<RosbridgeProtocolHandlerBase> this_ = this_weak.lock();
+  if(this_) {
+    return this_->onServiceServerCallback(service, options, request, response);
+  }
+  return false;
+}
+
+void RosbridgeProtocolHandlerBase::advertiseService(const std::string& service, const std::string& type, const std::string& id,
+						    const ServiceServerOptions& options) {
+  if(service_servers_.find(service) != service_servers_.end()) { // already advertised service
+    StatusMessageStream(this, WARNING, id) << service << " service is already advertised";
+    // TODO handle all cases here (same type, etc)
+  }
+  else {
+    boost::weak_ptr<RosbridgeProtocolHandlerBase> weak_this(keep_alive_this_);
+    roscpp_message_reflection::ServiceServer server = nh_.advertiseService(service, type,
+            boost::bind(weak_onServiceServerCallback, weak_this, service, options, _1, _2));
+    if(server) {
+      StatusMessageStream(this, INFO, id) << "Advertising Service: service=" << service << ", type=" << type;
+      ServiceServerInfo info;
+      info.server = server;
+      info.options = options;
+      service_servers_[service] = info;
+    }
+    else {
+      StatusMessageStream(this, ERROR, id) << "Failed to advertise service: service=" << service << ", type=" << type;
+    }
+  }
+}
+
+void RosbridgeProtocolHandlerBase::unadvertiseService(const std::string& service, const std::string& id) {
+  size_t num_removed = service_servers_.erase(service);
+  if(num_removed == 0) {
+    StatusMessageStream(this, ERROR, id) << service << " is not advertised";
+  }
+  else {
+    StatusMessageStream(this, INFO, id) << "Unadvertising service: service=" << service;
+  }
+}
+
+
+bool RosbridgeProtocolHandlerBase::onServiceServerCallback(const std::string& service,
+							   const ServiceServerOptions& options,
+							   const roscpp_message_reflection::Message& request,
+							   roscpp_message_reflection::Message& response) {
+  class PendingServiceCallScope {
+  public:
+    PendingServiceCallScope(ServiceCallCollection& collection,
+			    PendingServiceCall& pending_call)
+      : id_(pending_call.id), collection_(collection) {
+      collection_.insert(ServiceCallCollection::value_type(id_, pending_call));
+    }
+    ~PendingServiceCallScope() {
+      collection_.erase(id_);
+    }
+  private:
+    std::string id_;
+    ServiceCallCollection& collection_;
+  };
+
+  ROS_ERROR_STREAM("Calling service");
+  PendingServiceCall call(boost::lexical_cast<std::string>(next_service_call_id_++), response);
+  {
+    boost::unique_lock<boost::mutex> lock(service_server_call_mutex_);
+    PendingServiceCallScope call_scope(pending_service_calls_, call);
+    sendServiceServerRequest(service, call.id, options, request);
+    boost::system_time timeout = boost::get_system_time() + boost::posix_time::seconds(5);
+    while(!call.finished) {
+      if(!service_server_call_cv_.timed_wait(lock, timeout)) {
+	break; // timed out
+      }
+    }
+  }
+
+  ROS_ERROR_STREAM("Service result: finished=" << call.finished << ", result=" << call.result);
+  if(!call.finished)
+    return false;
+  return call.result;
+}
+
+RosbridgeProtocolHandlerBase::PendingServiceCallResolver::PendingServiceCallResolver(RosbridgeProtocolHandlerBase* handler,
+										     const std::string& service, const std::string& id)
+  : pending_call_(NULL), handler_(handler), lock_(handler->service_server_call_mutex_) {
+  ServiceCallCollection::iterator itr = handler->pending_service_calls_.find(id);
+  if(itr != handler->pending_service_calls_.end()) {
+    pending_call_ = &itr->second;
+  }
+}
+
+RosbridgeProtocolHandlerBase::PendingServiceCallResolver::~PendingServiceCallResolver() {
+  handler_->service_server_call_cv_.notify_all();
+}
+
+void RosbridgeProtocolHandlerBase::PendingServiceCallResolver::resolve(bool result) {
+  pending_call_->result = result;
+  pending_call_->finished = true;
+}
+
 
 roscpp_message_reflection::ServiceClient RosbridgeProtocolHandlerBase::getServiceClient(const std::string& service,
 											const std::string& type) {
