@@ -21,6 +21,8 @@ public:
   virtual void sendServiceServerRequest(const std::string& service, const std::string& id,
 					const ServiceServerOptions& options,
 					const roscpp_message_reflection::Message& request);
+  virtual void sendServiceResponse(const std::string& service, const std::string& id, bool result,
+				   const roscpp_message_reflection::Message& response);
 
 private:
   void onMessage(const Json::Value& msg);

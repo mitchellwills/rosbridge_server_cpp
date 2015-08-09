@@ -189,6 +189,20 @@ void JsonRosbridgeProtocolHandler::sendServiceServerRequest(const std::string& s
 }
 
 
+void JsonRosbridgeProtocolHandler::sendServiceResponse(const std::string& service, const std::string& id, bool result,
+						       const roscpp_message_reflection::Message& response) {
+  Json::Value json_response_msg;
+  json_response_msg["op"] = "service_response";
+  json_response_msg["service"] = service;
+  if(!id.empty())
+    json_response_msg["id"] = id;
+  json_response_msg["result"] = result;
+  JsonValueAssignmentVisitor response_root_visitor(json_response_msg["values"]);
+  response_root_visitor(response);
+  sendMessage(json_response_msg, MessageSendOptions());
+}
+
+
 static bool pngCompress(const Buffer& data, std::string* output) {
   size_t width = floor(sqrt(data.size()/3.0));
   size_t height = ceil((data.size()/3.0) / width);
@@ -243,17 +257,10 @@ void JsonRosbridgeProtocolHandler::onMessage(const Json::Value& json_msg) {
     unadvertise(json_msg["topic"].asString(), id);
   }
   else if(op == "publish") {
-    std::string topic = json_msg["topic"].asString();
-    roscpp_message_reflection::Publisher pub = getPublisher(topic);
-    if(pub) {
-      roscpp_message_reflection::Message msg = pub.createMessage();
+    PublishHandler handler(this, json_msg["topic"].asString(), id);
+    if(handler) {
       JsonValueAssignerVisitor root_visitor(json_msg["msg"]);
-      root_visitor(msg);
-      // TODO handle publish special cases
-      pub.publish(msg);
-    }
-    else {
-      StatusMessageStream(this, ERROR, id) << topic << " is not advertised";
+      root_visitor(handler.getMessage());
     }
   }
   else if(op == "subscribe") {
@@ -267,27 +274,10 @@ void JsonRosbridgeProtocolHandler::onMessage(const Json::Value& json_msg) {
   else if(op == "call_service") {
     std::string service = json_msg["service"].asString();
     std::string type = json_msg["type"].asString();
-    std::string id = json_msg["id"].asString();
-    roscpp_message_reflection::ServiceClient client = getServiceClient(service, type);
-    if(client) {
-      roscpp_message_reflection::Message request = client.createRequestMessage();
+    ServiceCallHandler handler(this, service, type, id);
+    if(handler) {
       JsonValueAssignerVisitor request_root_visitor(json_msg["args"]);
-      request_root_visitor(request);
-      roscpp_message_reflection::Message response = client.createResponseMessage();
-      bool result = client.call(request, response);
-
-      // Send back the result
-      Json::Value json_response_msg;
-      json_response_msg["op"] = "service_response";
-      json_response_msg["service"] = service;
-      json_response_msg["id"] = id;
-      json_response_msg["result"] = result;
-      JsonValueAssignmentVisitor response_root_visitor(json_response_msg["values"]);
-      response_root_visitor(response);
-      sendMessage(json_response_msg, MessageSendOptions());
-    }
-    else {
-      StatusMessageStream(this, ERROR, id) << "Could not create service client: " << service;
+      request_root_visitor(handler.getRequestMessage());
     }
   }
   else if(op == "advertise_service") {
@@ -298,16 +288,11 @@ void JsonRosbridgeProtocolHandler::onMessage(const Json::Value& json_msg) {
     unadvertiseService(json_msg["service"].asString(), id);
   }
   else if(op == "service_response") {
-    std::string service = json_msg["service"].asString();
-    std::string id = json_msg["id"].asString();
-    PendingServiceCallResolver resolver(this, service, id);
-    if(resolver.isActive()) {
+    ServiceResponseHandler handler(this, json_msg["service"].asString(), id);
+    if(handler) {
       JsonValueAssignerVisitor root_visitor(json_msg["values"]);
-      root_visitor(resolver.getResponseMessage());
-      resolver.resolve(json_msg["result"].asBool());
-    }
-    else {
-      StatusMessageStream(this, ERROR, id) << service << " no pending call found for call id: " << id;
+      root_visitor(handler.getResponseMessage());
+      handler.resolve(json_msg["result"].asBool());
     }
   }
   else if(op == "set_level") {

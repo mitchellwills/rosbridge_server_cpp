@@ -60,16 +60,6 @@ void RosbridgeProtocolHandlerBase::unadvertise(const std::string& topic, const s
   }
 }
 
-roscpp_message_reflection::Publisher RosbridgeProtocolHandlerBase::getPublisher(const std::string& topic) {
-  std::map<std::string, PublisherInfo>::iterator itr = publishers_.find(topic);
-  if(itr == publishers_.end()) { // not advertised
-    return roscpp_message_reflection::Publisher();
-  }
-  else {
-    return itr->second.publisher;
-  }
-}
-
 static void weak_onSubscribeCallback(boost::weak_ptr<RosbridgeProtocolHandlerBase> this_weak, const std::string& topic,
 				     const SubscribeOptions& options,
 				     const boost::shared_ptr<const roscpp_message_reflection::Message>& message) {
@@ -196,29 +186,83 @@ bool RosbridgeProtocolHandlerBase::onServiceServerCallback(const std::string& se
   return call.result;
 }
 
-RosbridgeProtocolHandlerBase::PendingServiceCallResolver::PendingServiceCallResolver(RosbridgeProtocolHandlerBase* handler,
-										     const std::string& service, const std::string& id)
-  : pending_call_(NULL), handler_(handler), lock_(handler->service_server_call_mutex_) {
+
+
+RosbridgeProtocolHandlerBase::PublishHandler::PublishHandler(RosbridgeProtocolHandlerBase* handler,
+							     const std::string& topic, const std::string& id) {
+  std::map<std::string, PublisherInfo>::iterator itr = handler->publishers_.find(topic);
+  if(itr != handler->publishers_.end()) { // not advertised
+    pub_ = itr->second.publisher;
+    message_.reset(new roscpp_message_reflection::Message(pub_.getMessageType()));
+  }
+  else {
+    StatusMessageStream(handler, ERROR, id) << topic << " is not advertised";
+  }
+}
+
+RosbridgeProtocolHandlerBase::PublishHandler::~PublishHandler() {
+  if(pub_) {
+    // TODO handle publish special cases (header, etc)
+    pub_.publish(*message_);
+  }
+}
+
+
+
+
+
+RosbridgeProtocolHandlerBase::ServiceCallHandler::ServiceCallHandler(RosbridgeProtocolHandlerBase* handler,
+								     const std::string& service, const std::string& type,
+								     const std::string& id)
+  : handler_(handler), service_(service), type_(type), id_(id) {
+  client_ = handler->nh_.serviceClient(service, type);
+  if(client_) {
+    request_.reset(new roscpp_message_reflection::Message(client_.getRequestType()));
+    response_.reset(new roscpp_message_reflection::Message(client_.getResponseType()));
+  }
+  else {
+    StatusMessageStream(handler_, ERROR, id_) << "Could not create service client: " << service_;
+  }
+}
+
+RosbridgeProtocolHandlerBase::ServiceCallHandler::~ServiceCallHandler() {
+  if(client_) {
+    result_ = client_.call(*request_, *response_);
+    handler_->sendServiceResponse(service_, id_, result_, *response_);
+  }
+}
+
+
+
+
+
+RosbridgeProtocolHandlerBase::ServiceResponseHandler::ServiceResponseHandler(RosbridgeProtocolHandlerBase* handler,
+									     const std::string& service, const std::string& id)
+  : handler_(handler), pending_call_(NULL), lock_(handler->service_server_call_mutex_) {
   ServiceCallCollection::iterator itr = handler->pending_service_calls_.find(id);
   if(itr != handler->pending_service_calls_.end()) {
     pending_call_ = &itr->second;
   }
+  else {
+    StatusMessageStream(handler_, ERROR, id) << service << " no pending call found for call id: " << id;
+  }
 }
 
-RosbridgeProtocolHandlerBase::PendingServiceCallResolver::~PendingServiceCallResolver() {
-  handler_->service_server_call_cv_.notify_all();
+RosbridgeProtocolHandlerBase::ServiceResponseHandler::~ServiceResponseHandler() {
+  if(pending_call_) {
+    ROS_ASSERT(pending_call_->finished);
+    handler_->service_server_call_cv_.notify_all();
+  }
 }
 
-void RosbridgeProtocolHandlerBase::PendingServiceCallResolver::resolve(bool result) {
+void RosbridgeProtocolHandlerBase::ServiceResponseHandler::resolve(bool result) {
   pending_call_->result = result;
   pending_call_->finished = true;
 }
 
 
-roscpp_message_reflection::ServiceClient RosbridgeProtocolHandlerBase::getServiceClient(const std::string& service,
-											const std::string& type) {
-  return nh_.serviceClient(service, type);
-}
+
+
 
 void RosbridgeProtocolHandlerBase::setStatusLevel(StatusLevel level, const std::string& id) {
   if(level != INVALID_LEVEL) {

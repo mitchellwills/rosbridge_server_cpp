@@ -93,8 +93,6 @@ public:
   bool onServiceServerCallback(const std::string& service, const ServiceServerOptions& options,
 			       const roscpp_message_reflection::Message& request,
 			       roscpp_message_reflection::Message& response);
-  roscpp_message_reflection::ServiceClient getServiceClient(const std::string& service,
-							    const std::string& type);
   void setStatusLevel(StatusLevel level, const std::string& id);
 
   virtual void onSubscribeCallback(const std::string& topic,
@@ -103,9 +101,8 @@ public:
   virtual void sendServiceServerRequest(const std::string& service, const std::string& id,
 					const ServiceServerOptions& options,
 					const roscpp_message_reflection::Message& request) = 0;
-
-
-  roscpp_message_reflection::Publisher getPublisher(const std::string& topic);
+  virtual void sendServiceResponse(const std::string& service, const std::string& id, bool result,
+				   const roscpp_message_reflection::Message& response) = 0;
 
 protected:
   virtual void sendStatusMessage(StatusLevel level, const std::string& id, const std::string& msg) = 0;
@@ -173,18 +170,55 @@ private:
   ServiceCallCollection pending_service_calls_;
 
 protected:
-  class PendingServiceCallResolver {
+  class PublishHandler {
   public:
-    PendingServiceCallResolver(RosbridgeProtocolHandlerBase* handler,
-			       const std::string& service, const std::string& id);
-    ~PendingServiceCallResolver();
+    PublishHandler(RosbridgeProtocolHandlerBase* handler,
+		   const std::string& topic, const std::string& id);
+    ~PublishHandler();
 
-    bool isActive() { return pending_call_; }
+    operator bool() { return pub_; }
+    roscpp_message_reflection::Message& getMessage() { return *message_; }
+
+  private:
+    roscpp_message_reflection::Publisher pub_;
+    boost::scoped_ptr<roscpp_message_reflection::Message> message_;
+  };
+
+  class ServiceCallHandler {
+  public:
+    ServiceCallHandler(RosbridgeProtocolHandlerBase* handler,
+		       const std::string& service, const std::string& type, const std::string& id);
+    ~ServiceCallHandler();
+
+    operator bool() { return client_; }
+    roscpp_message_reflection::Message& getRequestMessage() { return *request_; }
+
+  private:
+    RosbridgeProtocolHandlerBase* handler_;
+    std::string service_;
+    std::string id_;
+    std::string type_;
+
+    roscpp_message_reflection::ServiceClient client_;
+    boost::scoped_ptr<roscpp_message_reflection::Message> request_;
+    boost::scoped_ptr<roscpp_message_reflection::Message> response_;
+    bool result_;
+  };
+
+  class ServiceResponseHandler {
+  public:
+    ServiceResponseHandler(RosbridgeProtocolHandlerBase* handler,
+			   const std::string& service, const std::string& id);
+    ~ServiceResponseHandler();
+
+    operator bool() { return pending_call_; }
     roscpp_message_reflection::Message& getResponseMessage() { return pending_call_->response; }
     void resolve(bool result);
+
   private:
-    PendingServiceCall* pending_call_;
     RosbridgeProtocolHandlerBase* handler_;
+
+    PendingServiceCall* pending_call_;
     boost::unique_lock<boost::mutex> lock_;
   };
 
