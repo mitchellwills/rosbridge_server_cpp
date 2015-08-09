@@ -274,7 +274,7 @@ void JsonRosbridgeProtocolHandler::onMessage(const Json::Value& json_msg) {
       JsonValueAssignerVisitor request_root_visitor(json_msg["args"]);
       request_root_visitor(request);
       roscpp_message_reflection::Message response = client.createResponseMessage();
-      bool result = client.call(request, &response);
+      bool result = client.call(request, response);
 
       // Send back the result
       Json::Value json_response_msg;
