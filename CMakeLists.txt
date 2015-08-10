@@ -26,9 +26,6 @@ catkin_package(
 ## Build ##
 ###########
 
-# TODO need to handle this better in roscpp_message_reflection
-add_definitions(-DBOOST_MPL_CFG_NO_PREPROCESSED_HEADERS -DBOOST_MPL_LIMIT_VECTOR_SIZE=30)
-
 include_directories(include)
 include_directories(
   ${catkin_INCLUDE_DIRS}
